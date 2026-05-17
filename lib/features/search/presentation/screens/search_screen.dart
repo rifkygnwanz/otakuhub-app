@@ -30,16 +30,18 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   Widget build(BuildContext context) {
     final query = ref.watch(searchQueryProvider);
     final resultsAsync = ref.watch(searchResultsProvider);
+    final history = ref.watch(searchHistoryProvider);
     final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       body: SafeArea(
         child: Column(
           children: [
+            // Premium Header search bar
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
               child: Hero(
-                tag: 'search-bar',
+                tag: 'search-search-bar',
                 child: Material(
                   color: Colors.transparent,
                   child: TextField(
@@ -47,6 +49,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     autofocus: false,
                     onChanged: (v) =>
                         ref.read(searchQueryProvider.notifier).state = v,
+                    onSubmitted: (val) {
+                      ref.read(searchHistoryProvider.notifier).addQuery(val);
+                    },
                     decoration: InputDecoration(
                       hintText: 'search_hint'.tr(),
                       prefixIcon: Icon(
@@ -71,13 +76,19 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 ),
               ),
             ),
+            // Expanded content: History vs Results vs Empty States
             Expanded(
               child: query.isEmpty
-                  ? EmptyView(
-                      icon: Icons.manage_search_rounded,
-                      title: 'search_empty_title'.tr(),
-                      subtitle: 'search_empty_subtitle'.tr(),
-                    )
+                  ? (history.isNotEmpty
+                      ? _SearchHistoryList(
+                          history: history,
+                          controller: _controller,
+                        )
+                      : EmptyView(
+                          icon: Icons.manage_search_rounded,
+                          title: 'search_empty_title'.tr(),
+                          subtitle: 'search_empty_subtitle'.tr(),
+                        ))
                   : resultsAsync.when(
                       loading: () => GridView.builder(
                         padding: const EdgeInsets.symmetric(
@@ -120,10 +131,17 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                               itemCount: items.length,
                               itemBuilder: (context, index) {
                                 final anime = items[index];
+                                final uniqueHeroTag = 'search-anime-${anime.id}';
                                 return _SearchResultCard(
                                   anime: anime,
-                                  onTap: () =>
-                                      context.push('/anime/${anime.id}'),
+                                  heroTag: uniqueHeroTag,
+                                  onTap: () {
+                                    // Save query to history upon clicking result
+                                    ref
+                                        .read(searchHistoryProvider.notifier)
+                                        .addQuery(query);
+                                    context.push('/anime/${anime.id}?heroTag=$uniqueHeroTag');
+                                  },
                                 );
                               },
                             ),
@@ -136,11 +154,116 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   }
 }
 
+class _SearchHistoryList extends ConsumerWidget {
+  final List<String> history;
+  final TextEditingController controller;
+
+  const _SearchHistoryList({
+    required this.history,
+    required this.controller,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'riwayat_pencarian'.tr(),
+                style: GoogleFonts.lexend(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: scheme.onSurface,
+                ),
+              ),
+              TextButton.icon(
+                onPressed: () =>
+                    ref.read(searchHistoryProvider.notifier).clearHistory(),
+                icon: Icon(Icons.delete_sweep_rounded,
+                    color: scheme.primary, size: 16),
+                label: Text(
+                  'hapus_semua'.tr(),
+                  style: GoogleFonts.lexend(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: scheme.primary,
+                  ),
+                ),
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(0, 0),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1, thickness: 0.5, indent: 20, endIndent: 20),
+        Expanded(
+          child: ListView.separated(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            itemCount: history.length,
+            separatorBuilder: (_, __) =>
+                const Divider(height: 1, thickness: 0.3, indent: 20, endIndent: 20),
+            itemBuilder: (context, index) {
+              final queryStr = history[index];
+              return ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
+                leading: Icon(
+                  Icons.history_rounded,
+                  color: scheme.onSurfaceVariant.withOpacity(0.5),
+                  size: 20,
+                ),
+                title: Text(
+                  queryStr,
+                  style: GoogleFonts.lexend(
+                    fontSize: 14,
+                    color: scheme.onSurface,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                trailing: IconButton(
+                  icon: Icon(
+                    Icons.close_rounded,
+                    color: scheme.onSurfaceVariant.withOpacity(0.5),
+                    size: 18,
+                  ),
+                  onPressed: () {
+                    ref
+                        .read(searchHistoryProvider.notifier)
+                        .removeQuery(queryStr);
+                  },
+                ),
+                onTap: () {
+                  controller.text = queryStr;
+                  ref.read(searchQueryProvider.notifier).state = queryStr;
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _SearchResultCard extends StatelessWidget {
   final AnimeModel anime;
+  final String heroTag;
   final VoidCallback onTap;
 
-  const _SearchResultCard({required this.anime, required this.onTap});
+  const _SearchResultCard({
+    required this.anime,
+    required this.heroTag,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -160,7 +283,7 @@ class _SearchResultCard extends StatelessWidget {
                 fit: StackFit.expand,
                 children: [
                   Hero(
-                    tag: 'anime-${anime.id}',
+                    tag: heroTag,
                     child: CachedNetworkImage(
                       imageUrl: imageUrl,
                       fit: BoxFit.cover,

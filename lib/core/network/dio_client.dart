@@ -14,22 +14,12 @@ class DioClient {
         connectTimeout: const Duration(seconds: 30),
         receiveTimeout: const Duration(seconds: 30),
         headers: {
-          'X-MAL-CLIENT-ID': ApiConstants.clientId,
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
         },
       ),
     );
-    _dio.interceptors.add(_MalInterceptor());
   }
 
   Dio get dio => _dio;
-}
-
-class _MalInterceptor extends Interceptor {
-  @override
-  void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
-    options.headers['X-MAL-CLIENT-ID'] = ApiConstants.clientId;
-    super.onRequest(options, handler);
-  }
-
 }

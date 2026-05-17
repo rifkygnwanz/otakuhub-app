@@ -32,6 +32,12 @@ final trendingProvider = FutureProvider<List<AnimeModel>>((ref) async {
   return response.data.map((n) => n.node).toList();
 });
 
+final upcomingAnimeProvider = FutureProvider<List<AnimeModel>>((ref) async {
+  final repo = ref.watch(animeRepositoryProvider);
+  final response = await repo.getRankingAnime(rankingType: 'upcoming');
+  return response.data.map((n) => n.node).toList();
+});
+
 final animeDetailProvider =
     FutureProvider.family<AnimeModel, int>((ref, id) async {
   final repo = ref.watch(animeRepositoryProvider);

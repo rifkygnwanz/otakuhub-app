@@ -8,6 +8,7 @@ class AnimeCard extends StatelessWidget {
   final VoidCallback? onTap;
   final double width;
   final double height;
+  final String? heroTag;
 
   const AnimeCard({
     super.key,
@@ -15,6 +16,7 @@ class AnimeCard extends StatelessWidget {
     this.onTap,
     this.width = 140,
     this.height = 200,
+    this.heroTag,
   });
 
   @override
@@ -34,7 +36,7 @@ class AnimeCard extends StatelessWidget {
               child: Stack(
                 children: [
                   Hero(
-                    tag: 'anime-${anime.id}',
+                    tag: heroTag ?? 'anime-${anime.id}',
                     child: CachedNetworkImage(
                       imageUrl: imageUrl ?? '',
                       width: width,

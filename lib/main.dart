@@ -8,6 +8,7 @@ import 'core/theme/app_theme.dart';
 import 'core/theme/theme_provider.dart';
 import 'features/home/presentation/screens/home_screen.dart';
 import 'features/home/presentation/screens/anime_detail_screen.dart';
+import 'features/home/presentation/screens/video_player_screen.dart';
 import 'features/search/presentation/screens/search_screen.dart';
 import 'features/wishlist/presentation/providers/wishlist_provider.dart';
 import 'features/wishlist/presentation/screens/wishlist_screen.dart';
@@ -80,7 +81,21 @@ final _router = GoRouter(
       path: '/anime/:id',
       builder: (context, state) {
         final id = int.parse(state.pathParameters['id']!);
-        return AnimeDetailScreen(animeId: id);
+        final heroTag = state.uri.queryParameters['heroTag'];
+        return AnimeDetailScreen(animeId: id, heroTag: heroTag);
+      },
+    ),
+    GoRoute(
+      path: '/watch/:id',
+      builder: (context, state) {
+        final id = int.parse(state.pathParameters['id']!);
+        final title = state.uri.queryParameters['title'] ?? 'Anime Trailer';
+        final youtubeId = state.uri.queryParameters['youtubeId'] ?? '';
+        return VideoPlayerScreen(
+          animeId: id,
+          animeTitle: title,
+          youtubeId: youtubeId,
+        );
       },
     ),
     GoRoute(

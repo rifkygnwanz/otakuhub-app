@@ -38,6 +38,7 @@ class SettingsScreen extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    const SizedBox(height: 8),
                     _SectionLabel(label: 'theme'.tr()),
                     _SettingsCard(
                       children: [

@@ -10,16 +10,65 @@ import '../../../../shared/widgets/error_view.dart';
 import '../../../wishlist/presentation/providers/wishlist_provider.dart';
 import '../providers/home_provider.dart';
 
-class AnimeDetailScreen extends ConsumerWidget {
+class AnimeDetailScreen extends ConsumerStatefulWidget {
   final int animeId;
-  const AnimeDetailScreen({super.key, required this.animeId});
+  final String? heroTag;
+  const AnimeDetailScreen({super.key, required this.animeId, this.heroTag});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final detailAsync = ref.watch(animeDetailProvider(animeId));
+  ConsumerState<AnimeDetailScreen> createState() => _AnimeDetailScreenState();
+}
+
+class _AnimeDetailScreenState extends ConsumerState<AnimeDetailScreen> {
+  late ScrollController _scrollController;
+  bool _showAppBarTitle = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = ScrollController();
+    _scrollController.addListener(_scrollListener);
+  }
+
+  void _scrollListener() {
+    if (_scrollController.hasClients) {
+      // 360 (expandedHeight) - kToolbarHeight = ~304. Fading in at 240 offsets creates a perfectly smooth crossover.
+      if (_scrollController.offset > 240) {
+        if (!_showAppBarTitle) {
+          setState(() {
+            _showAppBarTitle = true;
+          });
+        }
+      } else {
+        if (_showAppBarTitle) {
+          setState(() {
+            _showAppBarTitle = false;
+          });
+        }
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  String _capitalizeString(String? val) {
+    if (val == null || val.isEmpty) return 'n_a'.tr();
+    return val
+        .split('_')
+        .map((w) => w.isEmpty ? '' : w[0].toUpperCase() + w.substring(1).toLowerCase())
+        .join(' ');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final detailAsync = ref.watch(animeDetailProvider(widget.animeId));
     final wishlist = ref.watch(wishlistProvider);
     final scheme = Theme.of(context).colorScheme;
-    final isInWishlist = wishlist.any((a) => a.id == animeId);
+    final isInWishlist = wishlist.any((a) => a.id == widget.animeId);
 
     return Scaffold(
       body: detailAsync.when(
@@ -29,7 +78,7 @@ class AnimeDetailScreen extends ConsumerWidget {
           body: ErrorView(
             title: 'error_title'.tr(),
             subtitle: 'error_subtitle'.tr(),
-            onRetry: () => ref.refresh(animeDetailProvider(animeId)),
+            onRetry: () => ref.refresh(animeDetailProvider(widget.animeId)),
             retryLabel: 'retry'.tr(),
           ),
         ),
@@ -40,13 +89,45 @@ class AnimeDetailScreen extends ConsumerWidget {
           final studios = anime.studios ?? [];
           final recommendations = anime.recommendations ?? [];
 
+          final List<({String label, String value})> infoData = [];
+          if (anime.status != null && anime.status!.isNotEmpty) {
+            infoData.add((label: 'status'.tr(), value: anime.status!.tr()));
+          }
+          if (anime.startSeason != null && anime.startSeason!.season != null) {
+            infoData.add((
+              label: 'season'.tr(),
+              value: '${anime.startSeason!.season?.capitalize()} ${anime.startSeason!.year}'
+            ));
+          }
+          if (studios.isNotEmpty) {
+            infoData.add((
+              label: 'studios'.tr(),
+              value: studios.map((s) => s.name).join(', ')
+            ));
+          }
+          if (anime.source != null && anime.source!.isNotEmpty) {
+            infoData.add((
+              label: 'source'.tr(),
+              value: _capitalizeString(anime.source)
+            ));
+          }
+          if (anime.averageEpisodeDuration != null && anime.averageEpisodeDuration! > 0) {
+            infoData.add((
+              label: 'duration'.tr(),
+              value: '${anime.averageEpisodeDuration} min'
+            ));
+          }
+
           return CustomScrollView(
+            controller: _scrollController,
             slivers: [
               SliverAppBar(
                 expandedHeight: 360,
                 pinned: true,
                 stretch: true,
                 backgroundColor: scheme.surface,
+                elevation: 0,
+                scrolledUnderElevation: 0,
                 leading: GestureDetector(
                   onTap: () => context.pop(),
                   child: Container(
@@ -96,9 +177,29 @@ class AnimeDetailScreen extends ConsumerWidget {
                     ),
                   ),
                 ],
+                // Fades title in dynamically as user scrolls down
+                title: AnimatedOpacity(
+                  opacity: _showAppBarTitle ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeInOut,
+                  child: Text(
+                    anime.title,
+                    style: GoogleFonts.lexend(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: scheme.onSurface,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
                 flexibleSpace: FlexibleSpaceBar(
+                  stretchModes: const [
+                    StretchMode.zoomBackground,
+                    StretchMode.blurBackground,
+                  ],
                   background: Hero(
-                    tag: 'anime-$animeId',
+                    tag: widget.heroTag ?? 'anime-${widget.animeId}',
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
@@ -110,16 +211,19 @@ class AnimeDetailScreen extends ConsumerWidget {
                           errorWidget: (_, __, ___) =>
                               Container(color: scheme.surfaceContainerHighest),
                         ),
+                        // Cloud-like gradient overlay to seamlessly blend the banner into the page surface
                         Container(
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
                               colors: [
+                                Colors.black.withOpacity(0.35),
                                 Colors.transparent,
-                                scheme.surface.withOpacity(0.9),
+                                scheme.surface.withOpacity(0.5),
+                                scheme.surface,
                               ],
-                              stops: const [0.5, 1.0],
+                              stops: const [0.0, 0.4, 0.8, 1.0],
                             ),
                           ),
                         ),
@@ -130,7 +234,7 @@ class AnimeDetailScreen extends ConsumerWidget {
               ),
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -185,6 +289,35 @@ class AnimeDetailScreen extends ConsumerWidget {
                               .toList(),
                         ).animate().fadeIn(delay: 200.ms),
                       ],
+                      const SizedBox(height: 20),
+                      
+                      // Glowing Premium "Watch Trailer" Button
+                      if (anime.background != null && anime.background!.isNotEmpty)
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: () => context.push(
+                              '/watch/${anime.id}?title=${Uri.encodeComponent(anime.title)}&youtubeId=${anime.background}',
+                            ),
+                            icon: const Icon(Icons.play_circle_fill_rounded, size: 20),
+                            label: Text(
+                              'Watch Trailer',
+                              style: GoogleFonts.lexend(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            style: FilledButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              backgroundColor: scheme.primary,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              elevation: 4,
+                              shadowColor: scheme.primary.withOpacity(0.4),
+                            ),
+                          ),
+                        ).animate().fadeIn(delay: 220.ms).slideY(begin: 0.1, end: 0, duration: 300.ms),
                       if (anime.synopsis?.isNotEmpty == true) ...[
                         const SizedBox(height: 24),
                         Text(
@@ -198,44 +331,34 @@ class AnimeDetailScreen extends ConsumerWidget {
                         const SizedBox(height: 8),
                         _ExpandableSynopsis(synopsis: anime.synopsis!),
                       ],
-                      const SizedBox(height: 24),
-                      Text(
-                        'information'.tr(),
-                        style: GoogleFonts.lexend(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: scheme.onSurface,
+                      if (infoData.isNotEmpty) ...[
+                        const SizedBox(height: 24),
+                        Text(
+                          'information'.tr(),
+                          style: GoogleFonts.lexend(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: scheme.onSurface,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: scheme.surfaceContainerHighest.withOpacity(0.4),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Column(
-                          children: [
-                            _InfoRow(
-                                label: 'status'.tr(),
-                                value: anime.status ?? 'n_a'.tr()),
-                            _InfoRow(
-                                label: 'season'.tr(),
-                                value: anime.startSeason != null
-                                    ? '${anime.startSeason!.season?.capitalize()} ${anime.startSeason!.year}'
-                                    : 'n_a'.tr()),
-                            _InfoRow(
-                                label: 'studios'.tr(),
-                                value: studios.isEmpty
-                                    ? 'n_a'.tr()
-                                    : studios.map((s) => s.name).join(', ')),
-                            _InfoRow(
-                              label: 'rating'.tr(),
-                              value: anime.rating?.toUpperCase() ?? 'n_a'.tr(),
-                              isLast: true,
-                            ),
-                          ],
-                        ),
-                      ).animate().fadeIn(delay: 250.ms),
+                        const SizedBox(height: 12),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: scheme.surfaceContainerHighest.withOpacity(0.4),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Column(
+                            children: List.generate(infoData.length, (index) {
+                              final item = infoData[index];
+                              return _InfoRow(
+                                label: item.label,
+                                value: item.value,
+                                isLast: index == infoData.length - 1,
+                              );
+                            }),
+                          ),
+                        ).animate().fadeIn(delay: 250.ms),
+                      ],
                       if (recommendations.isNotEmpty) ...[
                         const SizedBox(height: 24),
                         Text(
@@ -259,10 +382,12 @@ class AnimeDetailScreen extends ConsumerWidget {
                             itemBuilder: (context, index) {
                               final rec = recommendations[index].node;
                               if (rec == null) return const SizedBox.shrink();
+                              final uniqueHeroTag = 'recommendation-anime-${rec.id}';
                               return AnimeCard(
                                 anime: rec,
+                                heroTag: uniqueHeroTag,
                                 onTap: () =>
-                                    context.push('/anime/${rec.id}'),
+                                    context.push('/anime/${rec.id}?heroTag=$uniqueHeroTag'),
                               );
                             },
                           ),
